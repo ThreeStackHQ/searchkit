@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+:root {
+  --indigo-600: #6366f1;
+  --sidebar-bg: #0f172a;
+  --main-bg: #1e293b;
+}
