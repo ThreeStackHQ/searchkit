@@ -54,7 +54,8 @@ export async function POST(
     content: d.content,
   }));
 
-  const inserted = await db
+  // Use xmax to distinguish actual inserts (xmax = 0) from updates (xmax != 0)
+  const upserted = await db
     .insert(documents)
     .values(values)
     .onConflictDoUpdate({
@@ -64,19 +65,25 @@ export async function POST(
         updatedAt: new Date(),
       },
     })
-    .returning({ id: documents.id });
+    .returning({ id: documents.id, xmax: sql<string>`xmax::text` });
 
-  // Update document count
-  await db
-    .update(searchIndexes)
-    .set({
-      documentCount: sql`${searchIndexes.documentCount} + ${inserted.length}`,
-      updatedAt: new Date(),
-    })
-    .where(eq(searchIndexes.id, params.id));
+  // Only count genuinely new rows (xmax = '0' means new insert, not update)
+  const newlyInserted = upserted.filter((r) => r.xmax === '0').length;
+
+  // Update document count only by the number of new docs (not updates)
+  if (newlyInserted > 0) {
+    await db
+      .update(searchIndexes)
+      .set({
+        documentCount: sql`${searchIndexes.documentCount} + ${newlyInserted}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(searchIndexes.id, params.id));
+  }
 
   return NextResponse.json({
-    ingested: inserted.length,
-    total: inserted.length,
+    ingested: upserted.length,
+    inserted: newlyInserted,
+    updated: upserted.length - newlyInserted,
   });
 }

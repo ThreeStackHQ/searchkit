@@ -56,6 +56,18 @@ export async function POST(req: NextRequest) {
   const safeLimit = Math.min(Math.max(1, limit), 100);
   const safeOffset = Math.max(0, offset);
 
+  const ftsCondition = and(
+    eq(documents.indexId, index_id),
+    sql`search_vector @@ plainto_tsquery('english', ${q})`
+  );
+
+  // Get total count of matching docs (for pagination)
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(documents)
+    .where(ftsCondition);
+  const totalCount = Number(countRow?.count ?? 0);
+
   const hits = await db
     .select({
       id: documents.id,
@@ -64,12 +76,7 @@ export async function POST(req: NextRequest) {
       score: sql<number>`ts_rank(search_vector, plainto_tsquery('english', ${q}))`,
     })
     .from(documents)
-    .where(
-      and(
-        eq(documents.indexId, index_id),
-        sql`search_vector @@ plainto_tsquery('english', ${q})`
-      )
-    )
+    .where(ftsCondition)
     .orderBy(sql`ts_rank(search_vector, plainto_tsquery('english', ${q})) DESC`)
     .limit(safeLimit)
     .offset(safeOffset);
@@ -77,13 +84,17 @@ export async function POST(req: NextRequest) {
   const took_ms = Date.now() - start;
 
   // Build highlight
+  function escapeRegex(s: string): string {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
   function buildHighlight(content: unknown, query: string): string {
     if (!highlight) return '';
     const text = typeof content === 'string' ? content : JSON.stringify(content);
-    const words = query.toLowerCase().split(/\s+/);
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
     let result = text.slice(0, 200);
     for (const w of words) {
-      result = result.replace(new RegExp(`(${w})`, 'gi'), '<b>$1</b>');
+      // Escape regex special chars to prevent ReDoS / errors on queries like "(foo" or "a+b"
+      result = result.replace(new RegExp(`(${escapeRegex(w)})`, 'gi'), '<b>$1</b>');
     }
     return result;
   }
@@ -95,7 +106,7 @@ export async function POST(req: NextRequest) {
       _score: h.score,
       _highlight: buildHighlight(h.content, q),
     })),
-    total: hits.length,
+    total: totalCount,
     took_ms,
     query: q,
   };

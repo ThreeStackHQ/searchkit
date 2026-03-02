@@ -68,13 +68,12 @@ export default function IndexesPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/v1/indexes');
+      const res = await fetch('/api/dashboard/indexes');
       if (!res.ok) throw new Error('Failed to load');
-      const data: IndexItem[] = await res.json() as IndexItem[];
-      setIndexes(data);
+      const data = await res.json() as { indexes: IndexItem[] };
+      setIndexes(data.indexes ?? []);
     } catch {
-      // Fallback to mock data
-      setIndexes(MOCK_INDEXES);
+      setError('Failed to load indexes. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -96,18 +95,22 @@ export default function IndexesPage() {
     setFormError('');
     setSubmitting(true);
     try {
-      const res = await fetch('/api/v1/indexes', {
+      const res = await fetch('/api/dashboard/indexes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: form.name, description: form.description || undefined }),
       });
-      if (!res.ok) throw new Error('Failed to create');
-      const data = await res.json() as { apiKey?: string; id: string; name: string };
-      setCreatedKey(data.apiKey ?? `sk_live_${Math.random().toString(36).slice(2, 18)}`);
+      const data = await res.json() as { index?: { id: string; name: string }; error?: string };
+      if (!res.ok) {
+        setFormError(data.error ?? 'Failed to create index');
+        return;
+      }
+      // Show success — user must go to API Keys page to create a bearer token
+      setCreatedKey('__created__');
       setIndexes((prev) => [
         ...prev,
         {
-          id: data.id,
+          id: data.index?.id ?? `idx_${Date.now()}`,
           name: form.name,
           description: form.description || null,
           documentCount: 0,
@@ -117,21 +120,7 @@ export default function IndexesPage() {
       ]);
       setForm({ name: '', description: '' });
     } catch {
-      // Mock success
-      const mockKey = `sk_live_${Math.random().toString(36).slice(2, 18)}`;
-      setCreatedKey(mockKey);
-      setIndexes((prev) => [
-        ...prev,
-        {
-          id: `idx_${Date.now()}`,
-          name: form.name,
-          description: form.description || null,
-          documentCount: 0,
-          searchesPerDay: 0,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-      setForm({ name: '', description: '' });
+      setFormError('Network error, please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -139,7 +128,7 @@ export default function IndexesPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch(`/api/v1/indexes/${id}`, { method: 'DELETE' });
+      await fetch(`/api/dashboard/indexes?id=${id}`, { method: 'DELETE' });
     } catch {
       // continue
     }

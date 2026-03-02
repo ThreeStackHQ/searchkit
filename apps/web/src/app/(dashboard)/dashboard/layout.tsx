@@ -11,7 +11,7 @@ interface DashboardLayoutProps {
 export default async function DashboardLayout({ children }: DashboardLayoutProps) {
   const session = await auth();
   if (!session) {
-    redirect('/auth/signin');
+    redirect('/login');
   }
 
   return (

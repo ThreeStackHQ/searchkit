@@ -92,16 +92,23 @@ export async function POST(
         updatedAt: new Date(),
       },
     })
-    .returning();
+    .returning({ id: documents.id, docId: documents.docId, indexId: documents.indexId, content: documents.content, createdAt: documents.createdAt, updatedAt: documents.updatedAt, xmax: sql<string>`xmax::text` });
 
-  // Update document count
-  await db
-    .update(searchIndexes)
-    .set({
-      documentCount: sql`${searchIndexes.documentCount} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(eq(searchIndexes.id, params.id));
+  // Only increment count for genuine inserts (xmax = '0'), not updates
+  if (doc?.xmax === '0') {
+    await db
+      .update(searchIndexes)
+      .set({
+        documentCount: sql`${searchIndexes.documentCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(searchIndexes.id, params.id));
+  }
 
+  // Strip internal xmax field before returning
+  if (doc) {
+    const { xmax: _xmax, ...docOut } = doc;
+    return NextResponse.json({ doc: docOut }, { status: 201 });
+  }
   return NextResponse.json({ doc }, { status: 201 });
 }
