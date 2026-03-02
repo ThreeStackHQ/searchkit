@@ -1,6 +1,7 @@
 {
   "name": "searchkit",
   "private": true,
+  "packageManager": "pnpm@10.29.2",
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
