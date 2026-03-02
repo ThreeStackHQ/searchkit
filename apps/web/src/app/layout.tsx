@@ -1,3 +1,4 @@
+import '@/lib/env'; // Validate required env vars on startup — throws if any are missing
 import type { Metadata } from 'next';
 import './globals.css';
 

@@ -164,9 +164,19 @@ const SearchKit = (() => {
     });
   }
 
+  function isSafeUrl(url: string): boolean {
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+    } catch {
+      return false;
+    }
+  }
+
   function openResult(idx: number): void {
     const r = results[idx];
-    if (r?.url) {
+    // Validate URL protocol to prevent javascript: injection
+    if (r?.url && isSafeUrl(r.url)) {
       window.open(r.url, '_blank', 'noopener,noreferrer');
     }
     close();
